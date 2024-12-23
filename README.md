@@ -4,6 +4,12 @@ A fully typed (with auto-completion) Healthie SDK for Node.js.
 
 This Healthie SDK provides convenient access to Healthie's GraphQL API from applications written in server-side JavaScript. The SDK also exports all of Healthie's GraphQL types.
 
+## Disclaimer
+
+This is not an official Healthie SDK as it's not built or maintained by the Healthie team. It's a simple wrapper around the Healthie GraphQL API that makes it easier to use in Node.js and TypeScript projects.
+
+Healthie does have official SDKs, see https://help.gethealthie.com/article/943-healthies-api.
+
 ## Generate the SDK
 
 ```bash
