@@ -1,8 +1,8 @@
 name: Compile and publish package
 
 on:
-  push:
-    branches: ['main', 'release/*']
+  release:
+    types: [published]
 
 jobs:
   deploy:
@@ -39,13 +39,6 @@ jobs:
 
       - name: Publish to NPM Registry
         run: |
-          pkg_version=$(cat package.json | jq -r '.version')
-          branch=${GITHUB_REF##*/}
-
-          if [[ $branch != "main" ]]; then
-            yarn version "$pkg_version-beta$GITHUB_RUN_NUMBER"
-            yarn npm publish --tag beta --access public
-          else
-            yarn version "$pkg_version"
-            yarn npm publish --access public
-          fi
+          release_version=${GITHUB_REF##*/}
+          yarn version "$release_version"
+          yarn npm publish --access public
