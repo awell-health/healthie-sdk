@@ -1029,6 +1029,11 @@ type AppointmentSetting {
   ask_to_confirm_via_text: Boolean
 
   """
+  True when either auto_schedule_charges_for_late_cancellation_no_show or charge_for_occurred_appts
+  """
+  auto_charge_enabled: Boolean
+
+  """
   When true, after an appointment has been set as occurred, a CMS 1500 claim can be automatically created for the session
   """
   auto_create_cms1500: Boolean
@@ -5981,6 +5986,12 @@ type DsiComment {
   organization_id: ID!
 }
 
+"""Organization level settings for E-Labs"""
+type ELabsSettings {
+  """A list of acceptable billing types"""
+  billing_types: [LabOrderBilling!]
+}
+
 """A processed eligibility check"""
 type EligibilityCheck {
   """The time the eligibility check was run"""
@@ -8524,6 +8535,11 @@ type InsurancePlan {
     known_value: Boolean
   ): Boolean
 
+  """
+  Whether or not this insurance plan is associated with fee schedule for the logged in user.
+  """
+  is_in_fee_schedules: Boolean
+
   """A combined string to use for labels"""
   name_and_id: String
 
@@ -8790,6 +8806,9 @@ type LabObservationResult {
   """The unique identifier of the result"""
   id: ID!
 
+  """True indicates the result is abnormal"""
+  is_abnormal: Boolean
+
   """The notes of the lab observation"""
   notes: String
 
@@ -8967,6 +8986,9 @@ enum LabOrderOrderKeys {
 
 """Lab Result"""
 type LabResult {
+  """The time the lab result record was created"""
+  created_at: ISO8601DateTime!
+
   """Document for lab result"""
   document: Document
 
@@ -10745,6 +10767,12 @@ type Mutation {
     """Parameters for deleteWithingsConnection"""
     input: deleteWithingsConnectionInput
   ): deleteWithingsConnectionPayload
+
+  """Delete a write-off"""
+  deleteWriteOff(
+    """Parameters for deleteWriteOff"""
+    input: deleteWriteOffInput
+  ): deleteWriteOffPayload
 
   """Destroy an API key for a Harbor Partner"""
   destroyHarborPartnerApiKey(
@@ -13056,6 +13084,9 @@ type Organization {
   """The creation date of the organization"""
   created_at: String!
 
+  """If enabled for organization, settings for E-Labs"""
+  e_labs_settings: ELabsSettings
+
   """The filled out teaching kitchen form"""
   filled_tk_form: FormAnswerGroup @deprecated
 
@@ -14915,9 +14946,6 @@ type Query {
 
   """Fetch an array of announcements for a provider"""
   announcements(
-    """Cursor to fetch results after"""
-    after: Cursor
-
     """If true, only show announcements that client has not dismissed"""
     exclude_dismissed: Boolean
 
@@ -14926,6 +14954,9 @@ type Query {
     offset: Int = 0
     should_paginate: Boolean
     page_size: Int
+
+    """Cursor to fetch results after"""
+    after: Cursor
   ): [Announcement!]
 
   """Number of announcements for a provider"""
@@ -15107,23 +15138,23 @@ type Query {
 
   """Fetch paginated Appointment Type collection (considered public)"""
   appointmentTypes(
-    """Cursor to fetch results after"""
-    after: Cursor
-
     """JSONified array of ids to include"""
     appointment_type_ids: String = null
     clients_can_book: Boolean = null
     embed_or_sharing_link: Boolean = false
     keywords: String = null
     offering_id: String = null
-    offset: Int = 0
     org_level: Boolean = false
-    page_size: Int = 1000
     provider_id: String = null
-    should_paginate: Boolean = true
     show_group: Boolean = null
     with_deleted_appt_types: Boolean = false
     order_by: AppointmentTypeOrderKeys = POSITION_ASC
+    offset: Int = 0
+    page_size: Int = 1000
+    should_paginate: Boolean = true
+
+    """Cursor to fetch results after"""
+    after: Cursor
   ): [AppointmentType!]
 
   """Number of appointment types (considered public)"""
@@ -15142,8 +15173,6 @@ type Query {
 
   """Fetch paginated appointment collection"""
   appointments(
-    """Cursor to fetch results after"""
-    after: Cursor
     colorSchemeId: String
     currentWeek: Boolean
     endDate: String
@@ -15207,12 +15236,6 @@ type Query {
     is_upcoming: Boolean
     is_with_clients: Boolean
     keywords: String = null
-    offset: Int = 0
-
-    """
-    The number of appointments to return at one time (when should_paginate is true). Maximum of 500
-    """
-    page_size: Int
     provider_id: ID
     provider_ids: [ID]
     should_paginate: Boolean = false
@@ -15230,6 +15253,15 @@ type Query {
     attendee_ids: [ID]
     state_license: String
     tag_ids: [ID]
+    offset: Int = 0
+
+    """
+    The number of appointments to return at one time (when should_paginate is true). Maximum of 500
+    """
+    page_size: Int
+
+    """Cursor to fetch results after"""
+    after: Cursor
   ): [Appointment!]
 
   """Number of Appointments"""
@@ -15458,8 +15490,6 @@ type Query {
 
   """Fetch paginated billing items collection"""
   billingItems(
-    """Cursor to fetch results after"""
-    after: Cursor
     client_id: ID
 
     """YYYY-MM-DD format"""
@@ -15469,14 +15499,17 @@ type Query {
     created_at_start: String = null
     keywords: String = null
     offerings_only: Boolean
-    offset: Int = 0
-
-    """The number of billing items to return (Max 100)"""
-    page_size: Int = 20
     provider_id: ID
     order_by: BillingItemOrderKeys = CREATED_AT_DESC
     status: [String] = []
     user_id: ID = null
+    offset: Int = 0
+
+    """The number of billing items to return (Max 100)"""
+    page_size: Int = 20
+
+    """Cursor to fetch results after"""
+    after: Cursor
   ): [BillingItem!]
 
   """Number of billing items"""
@@ -15528,10 +15561,11 @@ type Query {
   Fetch paginated stripe customer accounts with associated errors or soon to expire credit cards
   """
   cardIssues(
+    order_by: StripeCustomerDetailOrderKeys = EXPIRATION_DATE_DESC
+    offset: Int = 0
+
     """Cursor to fetch results after"""
     after: Cursor
-    offset: Int = 0
-    order_by: StripeCustomerDetailOrderKeys = EXPIRATION_DATE_DESC
   ): [StripeCustomerDetail!]
 
   """
@@ -15739,17 +15773,13 @@ type Query {
   """fetch a conversationmembership by id and invitees"""
   conversationMembershipInvitees(id: ID): [ConversationMembership!]
 
-  """Fetch paginated conversationmemberships collection"""
+  """Fetch paginated conversation memberships collection"""
   conversationMemberships(
-    """Cursor to fetch results after"""
-    after: Cursor
     active_status: String = "active"
     client_id: String = null
     conversation_type: String = "all"
     keywords: String = null
     notes_type: String = "inbox"
-    offset: Int = 0
-    page_size: Int = 20
 
     """
     If true with client_id, only returns client messages that are shared with the provider
@@ -15768,6 +15798,11 @@ type Query {
     provider_ids: [ID] = null
     read_status: String = "all"
     order_by: ConversationMembershipOrderKeys = UPDATED_AT_DESC
+    offset: Int = 0
+    page_size: Int = 20
+
+    """Cursor to fetch results after"""
+    after: Cursor
   ): [ConversationMembership!]
 
   """Number of conversationmembership"""
@@ -15850,12 +15885,13 @@ type Query {
 
   """Fetch paginated course membership collection"""
   courseMemberships(
-    """Cursor to fetch results after"""
-    after: Cursor
     client_id: ID
     fetch_all: Boolean = false
     offset: Int = 0
     page_size: Int = 10
+
+    """Cursor to fetch results after"""
+    after: Cursor
   ): [CourseMembership!]
 
   """Number of course memberships"""
@@ -15863,15 +15899,16 @@ type Query {
 
   """Fetch paginated course collection"""
   courses(
-    """Cursor to fetch results after"""
-    after: Cursor
     active: Boolean = true
     course_type: String = null
     keywords: String = null
-    offset: Int = 0
     only_available: Boolean = null
+    offset: Int = 0
     page_size: Int = null
     should_paginate: Boolean = true
+
+    """Cursor to fetch results after"""
+    after: Cursor
   ): [Course!]
 
   """Number of course"""
@@ -15920,12 +15957,13 @@ type Query {
 
   """Fetch paginated custom emails collection"""
   customEmails(
+    email_type: String = "Invite Email"
+    provider_id: ID
+    offset: Int = 0
+    page_size: Int = 10
+
     """Cursor to fetch results after"""
     after: Cursor
-    email_type: String = "Invite Email"
-    offset: Int = 0
-    provider_id: ID
-    page_size: Int = 10
   ): [CustomEmail!]
 
   """Number of custom emails"""
@@ -16643,18 +16681,19 @@ type Query {
 
   """Fetch lab orders collection"""
   labOrders(
-    """Cursor to fetch results after"""
-    after: Cursor
     client_filter: String = null
     client_id: ID
     keywords: String = null
     lab_filter: String = null
-    offset: Int = 0
-    page_size: Int = 10
     provider_filter: String = null
     recent_orders: Boolean = false
     order_by: LabOrderOrderKeys = UPDATED_AT_DESC
     status_filter: String = null
+    offset: Int = 0
+    page_size: Int = 10
+
+    """Cursor to fetch results after"""
+    after: Cursor
   ): [LabOrder!]
 
   """Number of lab orders related to the current user"""
@@ -16871,16 +16910,12 @@ type Query {
 
   """Fetch paginated note collection for given conversation"""
   notes(
-    """Cursor to fetch results after"""
-    after: Cursor
     conversation_id: ID
     ids: [ID]
     keywords: String = null
-    offset: Int = 0
 
     """If TRUE: get base user as a conversation owner"""
     org_chat: Boolean = false
-    page_size: Int = 10
     provider_id: ID = null
     scheduled_notes: Boolean = false
     since_note_id: ID
@@ -16888,6 +16923,11 @@ type Query {
 
     """If TRUE: get notes with tasks"""
     with_tasks: Boolean = false
+    offset: Int = 0
+    page_size: Int = 10
+
+    """Cursor to fetch results after"""
+    after: Cursor
   ): [Note!]
 
   """Number of notes"""
@@ -16958,25 +16998,26 @@ type Query {
 
   """Fetch paginated offerings collection (considered public)"""
   offerings(
-    """Cursor to fetch results after"""
-    after: Cursor
     client_visibility: String
     keywords: String = null
     offering_id: ID
     offering_ids: [ID]
     offering_user_group_id: ID
-    offset: Int = 0
     only_client_visible: Boolean = false
+    provider_id: ID
+    show_only_visible: Boolean = false
+    order_by: OfferingOrderKeys = SET_ORDER
+    status: String
+    offset: Int = 0
 
     """
     The number of packages to return at one time (when should_paginate is true)
     """
     page_size: Int
-    provider_id: ID
     should_paginate: Boolean = true
-    show_only_visible: Boolean = false
-    order_by: OfferingOrderKeys = SET_ORDER
-    status: String
+
+    """Cursor to fetch results after"""
+    after: Cursor
   ): [Offering!]
 
   """Number of offerings (considered public)"""
@@ -16999,13 +17040,14 @@ type Query {
 
   """Fetch onboarding flows collection"""
   onboardingFlows(
-    """Cursor to fetch results after"""
-    after: Cursor
     keywords: String = null
+    order_by: OnboardingFlowOrderKeys = NAME_ASC
     offset: Int = 0
     should_paginate: Boolean = true
     page_size: Int = 10
-    order_by: OnboardingFlowOrderKeys = NAME_ASC
+
+    """Cursor to fetch results after"""
+    after: Cursor
   ): [OnboardingFlow!]
 
   """Number of onboarding flows"""
@@ -17516,17 +17558,18 @@ type Query {
 
   """Fetch paginated super bills collection"""
   superBills(
-    """Cursor to fetch results after"""
-    after: Cursor
     client_id: ID
     keywords: String = null
-    offset: Int = 0
     provider_id: ID
     order_by: SuperBillOrderKeys = CREATED_AT_DESC
-    page_size: Int = 20
 
     """status to filter superbills, default all """
     status: String = "all"
+    offset: Int = 0
+    page_size: Int = 20
+
+    """Cursor to fetch results after"""
+    after: Cursor
   ): [SuperBill!]
 
   """Number of super bills"""
@@ -27787,6 +27830,21 @@ type deleteWithingsConnectionPayload {
   withings_connection: WithingsConnection
 }
 
+"""Autogenerated input type of deleteWriteOff"""
+input deleteWriteOffInput {
+  id: ID
+}
+
+"""Autogenerated return type of deleteWriteOff."""
+type deleteWriteOffPayload {
+  """DO NOT USE"""
+  clientMutationId: String @deprecated(reason: "DO NOT USE")
+
+  """The list of errors occurred during the mutation"""
+  messages: [FieldError]
+  write_off: WriteOff
+}
+
 """Autogenerated input type of destroyAnnouncement"""
 input destroyAnnouncementInput {
   id: ID
@@ -29058,8 +29116,20 @@ input updateAppointmentTypeInput {
   When false, clients will not have the ability to self-book this appointment
   """
   clients_can_book: Boolean
+
+  """
+  (IF LEFT OUT, DEFAULTS TO FALSE). Controls patients ability to schedule this appointment to be in person.
+  """
   contact_type_override_in_person: ContactTypeOverride
+
+  """
+  (IF LEFT OUT, DEFAULTS TO FALSE). Controls patients ability to schedule this appointment to be a phone call.
+  """
   contact_type_override_phone_call: ContactTypeOverride
+
+  """
+  (IF LEFT OUT, DEFAULTS TO FALSE). Controls patients ability to schedule this appointment to be a video call.
+  """
   contact_type_override_video_chat: ContactTypeOverride
 
   """
@@ -29099,6 +29169,8 @@ input updateAppointmentTypeInput {
 
   """Available options are CUSTOM and CPT_CODE"""
   pricing_option: String
+
+  """Defaults to removing all connections if left out"""
   provider_ids_for_appt_type_connections: String
   require_in_state_clients: Boolean
   require_specific_providers: Boolean
